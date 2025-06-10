@@ -66,8 +66,21 @@ jobs:
           EOF
           python find_key.py
 
-      - name: Upload results
-        uses: actions/upload-artifact@v3
+      - name: 📤 上传结果
+        uses: actions/upload-artifact@v4
         with:
-          name: found-keys
-          path: found_keys.txt
+          name: iptv-key-results
+          path: |
+            key.txt
+          retention-days: 1
+  
+      - name: 📝 显示结果摘要
+        if: always()
+        run: |
+          echo "===== 运行结果 ====="
+          if [ -f key.txt ]; then
+            echo "找到的密钥信息："
+            head -n 20 key.txt
+          else
+            echo "⚠️ 未生成 key.txt 文件"
+          fi
