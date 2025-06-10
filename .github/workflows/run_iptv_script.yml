@@ -1,34 +1,69 @@
-name: Find IPTV Key
-on: workflow_dispatch
+name: 🔑 Find IPTV Key (pycryptodomex 方案)
+
+on:
+  workflow_dispatch:
+    inputs:
+      authenticator:
+        description: "输入抓包获取的 Authenticator 值"
+        required: true
+        type: string
+
 jobs:
   find_key:
     runs-on: ubuntu-latest
+    timeout-minutes: 360  # 最长运行6小时
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: 🐍 Setup Python
+    - name: 🛠️ 检出代码
+      uses: actions/checkout@v4
+
+    - name: 🐍 设置 Python 3.10
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-    - name: 🔄 Use pycryptodomex instead
-      run: |
-        pip uninstall -y pycryptodome
-        pip install pycryptodomex
-        sed -i 's/from Crypto.Cipher import DES3/from Cryptodome.Cipher import DES3/' get_iptv_channels.py
-    - name: 🔍 Verify patch
-      run: |
-        python -c "
-        from Crypto.Cipher import DES3
-        try:
-            DES3.adjust_key_parity(b'\x00'*24)
-            print('✅ 补丁已成功应用')
-        except ValueError:
-            print('❌ 补丁未生效')
-        except Exception as e:
-            print(f'⚠️ 其他错误: {e}')
-        "
 
-    - name: 🚀 Run Script
+    - name: 🔄 替换加密库
       run: |
-        pip install pycryptodome requests
+        # 卸载原版并安装替代库
+        pip uninstall -y pycryptodome 2> /dev/null || true
+        pip install pycryptodomex requests
+
+        # 修改脚本中的导入语句
+        sed -i 's/from Crypto\.Cipher import DES3/from Cryptodome.Cipher import DES3/' get_iptv_channels.py
+
+        # 验证修改是否成功
+        if grep -q "Cryptodome.Cipher" get_iptv_channels.py; then
+          echo "✅ 加密库替换成功"
+        else
+          echo "❌ 替换失败，请检查脚本"
+          exit 1
+        fi
+
+    - name: 🚀 运行密钥查找
+      env:
+        AUTH_KEY: ${{ inputs.authenticator }}
+      run: |
+        # 确保调用 find_key 函数
+        sed -i "s/#find_key('abc')/find_key(os.getenv('AUTH_KEY'))/" get_iptv_channels.py
+        
+        echo "开始查找密钥，可能需要较长时间..."
         python get_iptv_channels.py
+
+    - name: 📤 上传结果
+      uses: actions/upload-artifact@v4
+      with:
+        name: iptv-key-results
+        path: |
+          key.txt
+        retention-days: 1
+
+    - name: 📝 显示结果摘要
+      if: always()
+      run: |
+        echo "===== 运行结果 ====="
+        if [ -f key.txt ]; then
+          echo "找到的密钥信息："
+          head -n 20 key.txt
+        else
+          echo "⚠️ 未生成 key.txt 文件"
+        fi
