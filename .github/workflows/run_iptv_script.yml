@@ -1,40 +1,29 @@
-name: Find IPTV Key
-
-on:
-  workflow_dispatch:
-    inputs:
-      authenticator:
-        description: 'Authenticator 值'
-        required: true
-
-jobs:
-  find-key:
-    runs-on: ubuntu-latest
+- name: Run find_key
+  env:
+    IPTV_AUTHENTICATOR: ${{ inputs.authenticator }}
+  run: |
+    # 应用运行时补丁
+    sed -i "2i\\
+import sys\\
+from Crypto.Cipher import DES3\\
+\\
+original_adjust = DES3.adjust_key_parity\\
+\\
+def patched_adjust_key_parity(key_in):\\
+    def parity_byte(key):\\
+        parity = 1\\
+        for i in range(1,8):\\
+            parity ^= (key >> i) & 1\\
+        return (key & 0xFE) | parity\\
+\\
+    key_out = bytearray(key_in)\\
+    for i in range(len(key_out)):\\
+        key_out[i] = parity_byte(key_out[i])\\
+    return key_out\\
+\\
+DES3.adjust_key_parity = patched_adjust_key_parity\\
+" get_iptv_channels.py
     
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests pycryptodome
-        
-    - name: Run find_key
-      env:
-        IPTV_AUTHENTICATOR: ${{ inputs.authenticator }}
-      run: |
-        # 修改脚本只执行find_key
-        sed -i "s/#find_key('abc')/find_key(os.getenv('IPTV_AUTHENTICATOR'))/" get_iptv_channels.py
-        python get_iptv_channels.py
-        
-    - name: Upload Results
-      uses: actions/upload-artifact@v4
-      with:
-        name: key-results
-        path: key.txt
+    # 修改脚本只执行find_key
+    sed -i "s/#find_key('abc')/find_key(os.getenv('IPTV_AUTHENTICATOR'))/" get_iptv_channels.py
+    python get_iptv_channels.py
