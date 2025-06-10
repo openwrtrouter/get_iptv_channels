@@ -1,0 +1,73 @@
+name: Find DES3 Key
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_range:
+        description: 'Start of key range (e.g., 0)'
+        required: true
+        default: '0'
+      end_range:
+        description: 'End of key range (e.g., 1000000)'
+        required: true
+        default: '1000000'
+
+jobs:
+  find_key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pycryptodome
+
+      - name: Run key finder
+        env:
+          AUTHENTICATOR: "9FC29F60B14ED115927CD0F194F9E565A5D81747C9EDC0A6D724677AD701DF2122C7B37BD15B1C8393FF1C005DC321B0095CBD7B4E16E2EE902D873C5FE2570C301A5712224F9DA8921270AFA8EA00EB65A4F35F13DD72EDB9171BE2129136D4654B33EC501D522C9B8203BE9D5476BC68A22A308BFADD5587E17AA66602BE85"
+        run: |
+          cat <<EOF > find_key.py
+          from Crypto.Cipher import DES3
+          import os
+
+          def find_key_range(authenticator, start, end):
+              keys = []
+              for x in range(start, end + 1):
+                  key = f"{x:08d}"
+                  if x % 100000 == 0:
+                      print(f"Testing key: {key}")
+                  try:
+                      pc = DES3.new(key + '0'*16, DES3.MODE_ECB)
+                      decrypted = pc.decrypt(bytes.fromhex(authenticator))
+                      if b'$' in decrypted:
+                          print(f"Found valid key: {key}")
+                          print(f"Decrypted: {decrypted}")
+                          keys.append(key)
+                  except:
+                      pass
+              return keys
+
+          if __name__ == "__main__":
+              authenticator = os.getenv("AUTHENTICATOR")
+              start = int("${{ inputs.start_range }}")
+              end = int("${{ inputs.end_range }}")
+              print(f"Searching keys from {start:08d} to {end:08d}")
+              found_keys = find_key_range(authenticator, start, end)
+              with open("found_keys.txt", "w") as f:
+                  f.write("\\n".join(found_keys))
+              print(f"Found {len(found_keys)} keys")
+          EOF
+          python find_key.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: found-keys
+          path: found_keys.txt
