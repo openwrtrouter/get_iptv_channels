@@ -1,68 +1,61 @@
-name: Find IPTV Encryption Key
-
-on:
+name: 🔑 Find IPTV Key
+on: 
   workflow_dispatch:
     inputs:
       authenticator:
-        description: 'Authenticator value from IPTV capture'
+        description: "Paste your Authenticator value here"
         required: true
-        default: ''
+        type: string
 
 jobs:
-  find-iptv-key:
+  find_key:
+    name: 🔍 Find Encryption Key
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6小时超时
+    timeout-minutes: 360  # Max allowed for free tier
     
     steps:
-    - name: Checkout repository
+    - name: 🛠️ Checkout code
       uses: actions/checkout@v4
-      
-    - name: Set up Python
+
+    - name: 🐍 Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
-        
-    - name: Install dependencies
+        python-version: "3.10"
+
+    - name: 📦 Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        pip install --upgrade pip
         pip install requests pycryptodome
-        
-    - name: Patch DES3 module
+
+    - name: ⚙️ Apply DES3 patch
       run: |
-        # 自动应用运行时补丁
-        sed -i "2i\\
-import sys\\
-from Crypto.Cipher import DES3\\
-\\
-original_adjust = DES3.adjust_key_parity\\
-\\
-def patched_adjust_key_parity(key_in):\\
-    '''Patched version without key degeneracy check'''\\
-    def parity_byte(key):\\
-        parity = 1\\
-        for i in range(1,8):\\
-            parity ^= (key >> i) & 1\\
-        return (key & 0xFE) | parity\\
-\\
-    key_out = bytearray(key_in)\\
-    for i in range(len(key_out)):\\
-        key_out[i] = parity_byte(key_out[i])\\
-    return key_out\\
-\\
-DES3.adjust_key_parity = patched_adjust_key_parity\\
-" get_iptv_channels.py
-        
-    - name: Run key finder
+        cat << 'EOF' >> patch_des3.py
+        from Crypto.Cipher import DES3
+        original = DES3.adjust_key_parity
+        def patched(key_in):
+            def parity_byte(key):
+                parity = 1
+                for i in range(1,8):
+                    parity ^= (key >> i) & 1
+                return (key & 0xFE) | parity
+            key_out = bytearray(key_in)
+            for i in range(len(key_out)):
+                key_out[i] = parity_byte(key_out[i])
+            return key_out
+        DES3.adjust_key_parity = patched
+        EOF
+        python patch_des3.py
+
+    - name: 🚀 Run key finder
       env:
-        IPTV_AUTHENTICATOR: ${{ inputs.authenticator }}
+        AUTH: ${{ inputs.authenticator }}
       run: |
-        # 确保执行find_key函数
-        sed -i "s/#find_key('abc')/find_key(os.getenv('IPTV_AUTHENTICATOR'))/" get_iptv_channels.py
+        sed -i "s/#find_key('abc')/find_key(os.getenv('AUTH'))/" get_iptv_channels.py
         python get_iptv_channels.py
-        
-    - name: Upload results
+
+    - name: 📤 Upload results
       uses: actions/upload-artifact@v4
       with:
-        name: iptv-key-results
+        name: key-results
         path: key.txt
         retention-days: 1
