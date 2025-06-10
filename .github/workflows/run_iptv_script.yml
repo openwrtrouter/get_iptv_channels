@@ -1,0 +1,40 @@
+name: Find IPTV Key
+
+on:
+  workflow_dispatch: # 仅手动触发
+    inputs:
+      authenticator:
+        description: 'Authenticator 值'
+        required: true
+
+jobs:
+  find-key:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pycryptodome
+        
+    - name: Run find_key
+      env:
+        IPTV_AUTHENTICATOR: ${{ inputs.authenticator }}
+      run: |
+        # 修改脚本只执行find_key
+        sed -i "s/#find_key('abc')/find_key(os.getenv('IPTV_AUTHENTICATOR'))/" get_iptv_channels.py
+        python get_iptv_channels.py
+        
+    - name: Upload Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: key-results
+        path: key.txt
