@@ -64,7 +64,7 @@ class prpcrypt():
         except Exception as e:
             if 'degenerates' in str(e):
                 raisetxt = 'if key_out[:8] == key_out[8:16] or key_out[-16:-8] == key_out[-8:]:\nraise ValueError("Triple DES key degenerates to single DES")'
-                print('请将调用的DES3.py文件里adjust_key_parity方法中的：%s  注释掉'%raisetxt)
+                //print('请将调用的DES3.py文件里adjust_key_parity方法中的：%s  注释掉'%raisetxt)
             else:
                 print(e)
         de_text = bytes.fromhex(text)
