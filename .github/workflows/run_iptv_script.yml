@@ -1,61 +1,33 @@
-name: 🔑 Find IPTV Key
-on: 
-  workflow_dispatch:
-    inputs:
-      authenticator:
-        description: "Paste your Authenticator value here"
-        required: true
-        type: string
-
+name: Find IPTV Key
+on: workflow_dispatch
 jobs:
   find_key:
-    name: 🔍 Find Encryption Key
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # Max allowed for free tier
-    
     steps:
-    - name: 🛠️ Checkout code
-      uses: actions/checkout@v4
-
+    - uses: actions/checkout@v4
+    
     - name: 🐍 Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
 
-    - name: 📦 Install dependencies
+    - name: 🔧 Patch DES3.py
       run: |
-        pip install --upgrade pip
-        pip install requests pycryptodome
+        # 定位DES3.py文件路径
+        DES3_PATH=$(python -c "from Crypto.Cipher import DES3; print(DES3.__file__)")
+        echo "找到DES3.py路径: $DES3_PATH"
+        
+        # 备份原文件
+        sudo cp $DES3_PATH ${DES3_PATH}.bak
+        
+        # 注释掉关键检查
+        sudo sed -i '/if key_out$$:8$$ == key_out$$8:16$$ or key_out$$-16:-8$$ == key_out$$-8:$$:/,/raise ValueError("Triple DES key degenerates to single DES")/s/^/#/' $DES3_PATH
+        echo "已成功注释掉检查代码"
+        
+        # 验证修改
+        grep -A2 "if key_out$$:8$$ == key_out$$8:16$$" $DES3_PATH
 
-    - name: ⚙️ Apply DES3 patch
+    - name: 🚀 Run Script
       run: |
-        cat << 'EOF' >> patch_des3.py
-        from Crypto.Cipher import DES3
-        original = DES3.adjust_key_parity
-        def patched(key_in):
-            def parity_byte(key):
-                parity = 1
-                for i in range(1,8):
-                    parity ^= (key >> i) & 1
-                return (key & 0xFE) | parity
-            key_out = bytearray(key_in)
-            for i in range(len(key_out)):
-                key_out[i] = parity_byte(key_out[i])
-            return key_out
-        DES3.adjust_key_parity = patched
-        EOF
-        python patch_des3.py
-
-    - name: 🚀 Run key finder
-      env:
-        AUTH: ${{ inputs.authenticator }}
-      run: |
-        sed -i "s/#find_key('abc')/find_key(os.getenv('AUTH'))/" get_iptv_channels.py
+        pip install pycryptodome requests
         python get_iptv_channels.py
-
-    - name: 📤 Upload results
-      uses: actions/upload-artifact@v4
-      with:
-        name: key-results
-        path: key.txt
-        retention-days: 1
