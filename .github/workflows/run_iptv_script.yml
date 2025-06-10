@@ -10,22 +10,23 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-
-    - name: 🔧 Patch DES3.py
+    - name: 🔄 Use pycryptodomex instead
       run: |
-        # 定位DES3.py文件路径
-        DES3_PATH=$(python -c "from Crypto.Cipher import DES3; print(DES3.__file__)")
-        echo "找到DES3.py路径: $DES3_PATH"
-        
-        # 备份原文件
-        sudo cp $DES3_PATH ${DES3_PATH}.bak
-        
-        # 注释掉关键检查
-        sudo sed -i '/if key_out$$:8$$ == key_out$$8:16$$ or key_out$$-16:-8$$ == key_out$$-8:$$:/,/raise ValueError("Triple DES key degenerates to single DES")/s/^/#/' $DES3_PATH
-        echo "已成功注释掉检查代码"
-        
-        # 验证修改
-        grep -A2 "if key_out$$:8$$ == key_out$$8:16$$" $DES3_PATH
+        pip uninstall -y pycryptodome
+        pip install pycryptodomex
+        sed -i 's/from Crypto.Cipher import DES3/from Cryptodome.Cipher import DES3/' get_iptv_channels.py
+    - name: 🔍 Verify patch
+      run: |
+        python -c "
+        from Crypto.Cipher import DES3
+        try:
+            DES3.adjust_key_parity(b'\x00'*24)
+            print('✅ 补丁已成功应用')
+        except ValueError:
+            print('❌ 补丁未生效')
+        except Exception as e:
+            print(f'⚠️ 其他错误: {e}')
+        "
 
     - name: 🚀 Run Script
       run: |
